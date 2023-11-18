@@ -16,7 +16,6 @@ fn naive_gemm(
     for i in 0..m {
         for j in 0..n {
             for p in 0..k {
-                println!("m= {}, n={}, k={}", i, j, p);
                 c[element(i, j, ld_c)] += a[element(i, p, ld_a)] * b[element(p, j, ld_b)];
             }
         }
@@ -26,8 +25,9 @@ fn naive_gemm(
 fn display(m: usize, n: usize, ld_c: usize, c: &Vec<f64>) {
     for i in 0..m {
         for j in 0..n {
-            println!("{}", c[element(i, j, ld_c)]);
+            print!("{} \t", c[element(i, j, ld_c)]);
         }
+        print!("\n")
     }
 }
 
