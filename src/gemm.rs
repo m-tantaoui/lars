@@ -46,7 +46,7 @@ mod tests {
 
         bencher.iter(|| {
             naive_gemm(m, n, k, &a, ld_a, &b, ld_b, &mut c, ld_c);
-        })
+        });
     }
 
     #[test]
