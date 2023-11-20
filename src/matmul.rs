@@ -122,6 +122,28 @@ pub fn axpy_gemm(
     }
 }
 
+pub fn axpy_ger(
+    m: usize,
+    n: usize,
+    x: &[f64],
+    incx: usize,
+    y: &mut [f64],
+    incy: usize,
+    a: &mut [f64],
+    ld_a: usize,
+) {
+    for i in 0..m {
+        axpy(
+            n,
+            x[ele_i(i, incx)],
+            y,
+            incy,
+            &mut a[ele_ij(i, 0, ld_a)..],
+            ld_a,
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
