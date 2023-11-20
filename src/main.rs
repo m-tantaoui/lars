@@ -1,6 +1,6 @@
 use std::time::{Duration, SystemTime};
 
-use lars::gemm::naive_gemm;
+use lars::matmul::naive_gemm;
 
 fn timeit<F: FnMut() -> T, T>(mut f: F, repeat: usize) -> Vec<Duration> {
     let durations: Vec<Duration> = (0..repeat)
