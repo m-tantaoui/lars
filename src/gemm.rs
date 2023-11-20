@@ -2,15 +2,16 @@ extern crate test;
 
 use crate::utils::element;
 
+#[allow(clippy::too_many_arguments)]
 pub fn naive_gemm(
     m: usize,
     n: usize,
     k: usize,
-    a: &Vec<f64>,
+    a: &[f64],
     ld_a: usize,
-    b: &Vec<f64>,
+    b: &[f64],
     ld_b: usize,
-    c: &mut Vec<f64>,
+    c: &mut [f64],
     ld_c: usize,
 ) {
     for i in 0..m {

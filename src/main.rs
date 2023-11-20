@@ -6,8 +6,7 @@ fn timeit<F: FnMut() -> T, T>(mut f: F) -> Duration {
     let start = SystemTime::now();
     f();
     let end = SystemTime::now();
-    let duration = end.duration_since(start).unwrap();
-    return duration;
+    end.duration_since(start).unwrap()
 }
 
 fn compute_gflops() {
@@ -16,20 +15,23 @@ fn compute_gflops() {
     let n = 10; // number of columns of B
     let k = 10; // number of columns of A and number of rows of B , they must be equal!!!!!
 
-    let a = (0..100).into_iter().map(|i| i as f64).collect();
+    let vec_a: Vec<f64> = (0..100).map(|i| i as f64).collect();
+    let a = vec_a.as_slice();
     let ld_a = 10; // leading dimension of A
 
-    let b = (100..200).into_iter().map(|i| i as f64).collect();
+    let vec_b: Vec<f64> = (0..100).map(|i| i as f64).collect();
+    let b = vec_b.as_slice();
     let ld_b = 10; // leading dimension of B
 
-    let mut c = (0..100).into_iter().map(|i| i as f64).collect();
+    let mut vec_c: Vec<f64> = (0..100).map(|i| i as f64).collect();
+    let c = vec_c.as_mut_slice();
     let ld_c = 10; // leading dimension of C
 
     // computing C:=AB + C
     // naive_gemm(m, n, k, &a, ld_a, &b, ld_b, &mut c, ld_c);
 
-    let flops: f32 = ((2 * m * n * k) as f32 * 1_f32.powi(-9)) as f32; // number of floating points operations
-    let duration = timeit(|| naive_gemm(m, n, k, &a, ld_a, &b, ld_b, &mut c, ld_c));
+    let flops: f32 = (2 * m * n * k) as f32 * 1_f32.powi(-9); // number of floating points operations
+    let duration = timeit(|| naive_gemm(m, n, k, a, ld_a, b, ld_b, c, ld_c));
     let seconds = duration.as_secs() as f32;
     let gflops = flops / seconds;
     println!("GigaFlops {:.3} ", gflops);
