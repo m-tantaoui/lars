@@ -122,6 +122,7 @@ pub fn axpy_gemm(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn axpy_ger(
     m: usize,
     n: usize,
@@ -141,6 +142,32 @@ pub fn axpy_ger(
             &mut a[ele_ij(i, 0, ld_a)..],
             ld_a,
         );
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn axpy_ger_gemm(
+    m: usize,
+    n: usize,
+    k: usize,
+    a: &[f64],
+    ld_a: usize,
+    b: &mut [f64],
+    ld_b: usize,
+    c: &mut [f64],
+    ld_c: usize,
+) {
+    for p in 0..k {
+        axpy_ger(
+            m,
+            n,
+            &a[ele_ij(0, p, ld_a)..],
+            1,
+            &mut b[ele_ij(p, 0, ld_b)..],
+            ld_b,
+            c,
+            ld_c,
+        )
     }
 }
 
@@ -364,5 +391,48 @@ mod tests {
         axpy_gemv(m, n, &a, ld_a, &x, inc_x, &mut y, inc_y);
 
         assert_eq!(y, vec![0.0, 5.0, -4.0]);
+    }
+
+    #[bench]
+    fn benchmark_axpy_ger_gemm(bencher: &mut Bencher) {
+        // defining matrices as vectors (column major matrices)
+        let m = 3; //number of rows of A
+        let n = 2; // number of columns of B
+        let k = 3; // number of columns of A and number of rows of B , they must be equal!!!!!
+
+        let a = vec![1.0, 1.0, -2.0, -2.0, 1.0, 2.0, 2.0, 3.0, 1.0];
+        let ld_a = 3; // leading dimension of A
+
+        let mut b = vec![-2.0, 1.0, -1.0, 1.0, 3.0, 2.0];
+        let ld_b = 3; // leading dimension of B
+
+        let mut c = vec![1.0, -1.0, -2.0, 0.0, 2.0, 1.0];
+        let ld_c = 3; // leading dimension of C
+
+        bencher.iter(|| {
+            axpy_ger_gemm(m, n, k, &a, ld_a, &mut b, ld_b, &mut c, ld_c);
+        });
+    }
+
+    #[test]
+    fn test_axpy_ger_gemm() {
+        // defining matrices as vectors (column major matrices)
+        let m = 3; //number of rows of A
+        let n = 2; // number of columns of B
+        let k = 3; // number of columns of A and number of rows of B , they must be equal!!!!!
+
+        let a = vec![1.0, 1.0, -2.0, -2.0, 1.0, 2.0, 2.0, 3.0, 1.0];
+        let ld_a = 3; // leading dimension of A
+
+        let mut b = vec![-2.0, 1.0, -1.0, 1.0, 3.0, 2.0];
+        let ld_b = 3; // leading dimension of B
+
+        let mut c = vec![1.0, -1.0, -2.0, 0.0, 2.0, 1.0];
+        let ld_c = 3; // leading dimension of C
+
+        // computing C:=AB + C
+        axpy_ger_gemm(m, n, k, &a, ld_a, &mut b, ld_b, &mut c, ld_c);
+
+        assert_eq!(c, vec![-5.0, -5.0, 3.0, -1.0, 12.0, 7.0]);
     }
 }
