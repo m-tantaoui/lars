@@ -3,6 +3,10 @@ extern crate test;
 use crate::dot::{axpy, dots};
 use crate::utils::{ele_i, ele_ij};
 
+use self::GemmRoutines::{AxPyGemm, AxPyGerGemm, DotsGemm, NaiveGemm};
+use std::fmt;
+use std::slice::Iter;
+
 #[allow(clippy::too_many_arguments)]
 pub fn naive_gemm(
     m: usize,
@@ -168,6 +172,27 @@ pub fn axpy_ger_gemm(
             c,
             ld_c,
         )
+    }
+}
+
+#[derive(Debug)]
+pub enum GemmRoutines {
+    NaiveGemm,
+    DotsGemm,
+    AxPyGemm,
+    AxPyGerGemm,
+}
+
+impl GemmRoutines {
+    pub fn iterator() -> Iter<'static, GemmRoutines> {
+        static ROUTINES: [GemmRoutines; 4] = [NaiveGemm, DotsGemm, AxPyGemm, AxPyGerGemm];
+        ROUTINES.iter()
+    }
+}
+
+impl fmt::Display for GemmRoutines {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
     }
 }
 
