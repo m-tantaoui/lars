@@ -24,8 +24,11 @@ fn timeit<F: FnMut() -> T, T>(mut f: F, repeat: usize) -> Vec<Duration> {
     durations
 }
 
-fn measure_performance(wtr: &mut Writer<Stdout>, dimensions: usize) -> Result<(), Box<dyn Error>> {
-    for dim in 0..dimensions {
+fn measure_performance(
+    wtr: &mut Writer<Stdout>,
+    dimensions: Vec<usize>,
+) -> Result<(), Box<dyn Error>> {
+    for dim in dimensions {
         for routine in GemmRoutines::iterator() {
             // let dim: &usize = &500;
             // defining matrices as vectors (column major matrices)
@@ -98,7 +101,7 @@ struct Record {
 fn run() -> Result<(), Box<dyn Error>> {
     let mut wtr = csv::Writer::from_writer(io::stdout());
 
-    let dimensions = 1_000;
+    let dimensions = vec![50, 100, 200, 300, 500, 700, 1_000, 2_000, 3_000, 5000];
 
     measure_performance(&mut wtr, dimensions)?;
 
