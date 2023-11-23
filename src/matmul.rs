@@ -176,6 +176,7 @@ pub fn axpy_ger_gemm(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn block_naive_gemm(
     m: usize,
     n: usize,
@@ -203,6 +204,41 @@ pub fn block_naive_gemm(
                     &a[ele_ij(i, p, ld_a)..],
                     ld_a,
                     &b[ele_ij(p, j, ld_b)..],
+                    ld_b,
+                    &mut c[ele_ij(i, j, ld_c)..],
+                    ld_c,
+                )
+            }
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+
+pub fn block_axpy_ger_gemm(
+    m: usize,
+    n: usize,
+    k: usize,
+    a: &[f64],
+    ld_a: usize,
+    b: &mut [f64],
+    ld_b: usize,
+    c: &mut [f64],
+    ld_c: usize,
+) {
+    let nr = 4;
+    let mr = 4;
+    let kr = 4;
+    for i in (0..m).step_by(mr) {
+        for j in (0..n).step_by(nr) {
+            for p in (0..k).step_by(kr) {
+                axpy_ger_gemm(
+                    mr,
+                    nr,
+                    kr,
+                    &a[ele_ij(i, p, ld_a)..],
+                    ld_a,
+                    &mut b[ele_ij(p, j, ld_b)..],
                     ld_b,
                     &mut c[ele_ij(i, j, ld_c)..],
                     ld_c,
@@ -286,26 +322,26 @@ mod tests {
         assert_eq!(c, vec![-5.0, -5.0, 3.0, -1.0, 12.0, 7.0]);
     }
 
-    // #[bench]
-    // fn benchmark_block_naive_gemm(bencher: &mut Bencher) {
-    //     // defining matrices as vectors (column major matrices)
-    //     let m = 4 * 4; //number of rows of A
-    //     let n = 4 * 4; // number of columns of B
-    //     let k = 4 * 4; // number of columns of A and number of rows of B , they must be equal!!!!!
+    #[bench]
+    fn benchmark_block_naive_gemm(bencher: &mut Bencher) {
+        // defining matrices as vectors (column major matrices)
+        let m = 4 * 4; //number of rows of A
+        let n = 4 * 4; // number of columns of B
+        let k = 4 * 4; // number of columns of A and number of rows of B , they must be equal!!!!!
 
-    //     let a: Vec<f64> = (1..=(m * k * m * k)).map(|a| a as f64).collect();
-    //     let ld_a = 4 * 4; // leading dimension of A (number of rows)
+        let a: Vec<f64> = (1..=(m * k * m * k)).map(|a| a as f64).collect();
+        let ld_a = 4 * 4; // leading dimension of A (number of rows)
 
-    //     let b: Vec<f64> = (1..=(k * n * k * n)).map(|a| a as f64).collect();
-    //     let ld_b = 4 * 4; // leading dimension of B (number of rows)
+        let b: Vec<f64> = (1..=(k * n * k * n)).map(|a| a as f64).collect();
+        let ld_b = 4 * 4; // leading dimension of B (number of rows)
 
-    //     let mut c: Vec<f64> = (1..=(k * n * k * n)).map(|a| a as f64).collect();
-    //     let ld_c = 4 * 4; // leading dimension of C (number of rows)
+        let mut c: Vec<f64> = (1..=(k * n * k * n)).map(|a| a as f64).collect();
+        let ld_c = 4 * 4; // leading dimension of C (number of rows)
 
-    //     bencher.iter(|| {
-    //         block_naive_gemm(m, n, k, &a, ld_a, &b, ld_b, &mut c, ld_c);
-    //     });
-    // }
+        bencher.iter(|| {
+            block_naive_gemm(m, n, k, &a, ld_a, &b, ld_b, &mut c, ld_c);
+        });
+    }
 
     #[test]
     fn test_block_naive_gemm() {
@@ -546,5 +582,51 @@ mod tests {
         axpy_ger_gemm(m, n, k, &a, ld_a, &mut b, ld_b, &mut c, ld_c);
 
         assert_eq!(c, vec![-5.0, -5.0, 3.0, -1.0, 12.0, 7.0]);
+    }
+
+    #[bench]
+    fn benchmark_block_axpy_ger_gemm(bencher: &mut Bencher) {
+        // defining matrices as vectors (column major matrices)
+        let m = 4 * 4; //number of rows of A
+        let n = 4 * 4; // number of columns of B
+        let k = 4 * 4; // number of columns of A and number of rows of B , they must be equal!!!!!
+
+        let a: Vec<f64> = (1..=(m * k)).map(|a| a as f64).collect();
+        let ld_a = 4 * 4; // leading dimension of A (number of rows)
+
+        let mut b: Vec<f64> = (1..=(k * n)).map(|a| a as f64).collect();
+        let ld_b = 4 * 4; // leading dimension of B (number of rows)
+
+        let mut c: Vec<f64> = (1..=(m * n)).map(|a| a as f64).collect();
+        let ld_c = 4 * 4; // leading dimension of C (number of rows)
+
+        bencher.iter(|| {
+            block_axpy_ger_gemm(m, n, k, &a, ld_a, &mut b, ld_b, &mut c, ld_c);
+        });
+    }
+
+    #[test]
+    fn test_block_axpy_ger_gemm() {
+        // defining matrices as vectors (column major matrices)
+        let m = 4 * 4; //number of rows of A
+        let n = 4 * 4; // number of columns of B
+        let k = 4 * 4; // number of columns of A and number of rows of B , they must be equal!!!!!
+
+        let a: Vec<f64> = (1..=(m * k)).map(|a| a as f64).collect();
+        let ld_a = 4 * 4; // leading dimension of A (number of rows)
+
+        let mut b: Vec<f64> = (1..=(k * n)).map(|a| a as f64).collect();
+        let ld_b = 4 * 4; // leading dimension of B (number of rows)
+
+        let mut c: Vec<f64> = (1..=(m * n)).map(|a| a as f64).collect();
+        let mut c_ref: Vec<f64> = (1..=(m * n)).map(|a| a as f64).collect();
+        let ld_c = 4 * 4; // leading dimension of C (number of rows)
+
+        // computing C:=AB + C
+        block_axpy_ger_gemm(m, n, k, &a, ld_a, &mut b, ld_b, &mut c, ld_c);
+
+        naive_gemm(m, n, k, &a, ld_a, &b, ld_b, &mut c_ref, ld_c);
+
+        assert_eq!(c, c_ref);
     }
 }
