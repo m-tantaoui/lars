@@ -4,6 +4,7 @@ use crate::dot::{axpy, dots};
 use crate::utils::{ele_i, ele_ij};
 
 use self::GemmRoutines::{AxPyGemm, AxPyGerGemm, DotsGemm, NaiveGemm};
+use std::cmp::min;
 use std::fmt;
 use std::slice::Iter;
 
@@ -175,6 +176,42 @@ pub fn axpy_ger_gemm(
     }
 }
 
+pub fn block_naive_gemm(
+    m: usize,
+    n: usize,
+    k: usize,
+    a: &[f64],
+    ld_a: usize,
+    b: &[f64],
+    ld_b: usize,
+    c: &mut [f64],
+    ld_c: usize,
+) {
+    let nb = 4;
+    let mb = 4;
+    let kb = 4;
+    for j in (0..n).step_by(nb) {
+        let jb = min(n - j, nb);
+        for i in (0..m).step_by(mb) {
+            let ib = min(m - i, mb);
+            for p in (0..k).step_by(kb) {
+                let pb = min(k - p, kb);
+                naive_gemm(
+                    ib,
+                    jb,
+                    pb,
+                    &a[ele_ij(i, p, ld_a)..],
+                    ld_a,
+                    &b[ele_ij(p, j, ld_b)..],
+                    ld_b,
+                    &mut c[ele_ij(i, j, ld_c)..],
+                    ld_c,
+                )
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum GemmRoutines {
     NaiveGemm,
@@ -198,12 +235,14 @@ impl fmt::Display for GemmRoutines {
 
 #[cfg(test)]
 mod tests {
+    use crate::utils::display;
+
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use test::Bencher;
 
     #[bench]
-    fn benchmark_gemm(bencher: &mut Bencher) {
+    fn benchmark_naive_gemm(bencher: &mut Bencher) {
         // defining matrices as vectors (column major matrices)
         let m = 3; //number of rows of A
         let n = 2; // number of columns of B
@@ -224,7 +263,7 @@ mod tests {
     }
 
     #[test]
-    fn test_gemm() {
+    fn test_naive_gemm() {
         // defining matrices as vectors (column major matrices)
         let m = 3; //number of rows of A
         let n = 2; // number of columns of B
@@ -242,7 +281,55 @@ mod tests {
         // computing C:=AB + C
         naive_gemm(m, n, k, &a, ld_a, &b, ld_b, &mut c, ld_c);
 
+        display(m, n, ld_c, &c);
+
         assert_eq!(c, vec![-5.0, -5.0, 3.0, -1.0, 12.0, 7.0]);
+    }
+
+    // #[bench]
+    // fn benchmark_block_naive_gemm(bencher: &mut Bencher) {
+    //     // defining matrices as vectors (column major matrices)
+    //     let m = 4 * 4; //number of rows of A
+    //     let n = 4 * 4; // number of columns of B
+    //     let k = 4 * 4; // number of columns of A and number of rows of B , they must be equal!!!!!
+
+    //     let a: Vec<f64> = (1..=(m * k * m * k)).map(|a| a as f64).collect();
+    //     let ld_a = 4 * 4; // leading dimension of A (number of rows)
+
+    //     let b: Vec<f64> = (1..=(k * n * k * n)).map(|a| a as f64).collect();
+    //     let ld_b = 4 * 4; // leading dimension of B (number of rows)
+
+    //     let mut c: Vec<f64> = (1..=(k * n * k * n)).map(|a| a as f64).collect();
+    //     let ld_c = 4 * 4; // leading dimension of C (number of rows)
+
+    //     bencher.iter(|| {
+    //         block_naive_gemm(m, n, k, &a, ld_a, &b, ld_b, &mut c, ld_c);
+    //     });
+    // }
+
+    #[test]
+    fn test_block_naive_gemm() {
+        // defining matrices as vectors (column major matrices)
+        let m = 4 * 4; //number of rows of A
+        let n = 4 * 4; // number of columns of B
+        let k = 4 * 4; // number of columns of A and number of rows of B , they must be equal!!!!!
+
+        let a: Vec<f64> = (1..=(m * k)).map(|a| a as f64).collect();
+        let ld_a = 4 * 4; // leading dimension of A (number of rows)
+
+        let b: Vec<f64> = (1..=(k * n)).map(|a| a as f64).collect();
+        let ld_b = 4 * 4; // leading dimension of B (number of rows)
+
+        let mut c: Vec<f64> = (1..=(m * n)).map(|a| a as f64).collect();
+        let mut c_ref: Vec<f64> = (1..=(m * n)).map(|a| a as f64).collect();
+        let ld_c = 4 * 4; // leading dimension of C (number of rows)
+
+        // computing C:=AB + C
+        block_naive_gemm(m, n, k, &a, ld_a, &b, ld_b, &mut c, ld_c);
+
+        naive_gemm(m, n, k, &a, ld_a, &b, ld_b, &mut c_ref, ld_c);
+
+        assert_eq!(c, c_ref);
     }
 
     #[bench]
