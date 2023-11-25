@@ -8,7 +8,7 @@ use csv::Writer;
 use serde::Serialize;
 use std::time::{Duration, SystemTime};
 
-use lars::matmul::{axpy_gemm, axpy_ger_gemm, dots_gemm, naive_gemm, GemmRoutines};
+use lars::matmul::{axpy_gemm, axpy_ger_gemm, dots_gemm, gemm, naive_gemm, GemmRoutines};
 
 extern crate csv;
 
@@ -57,6 +57,7 @@ fn measure_performance(
                     GemmRoutines::DotsGemm => dots_gemm(m, n, k, a, ld_a, b, ld_b, c, ld_c),
                     GemmRoutines::AxPyGemm => axpy_gemm(m, n, k, a, ld_a, b, ld_b, c, ld_c),
                     GemmRoutines::AxPyGerGemm => axpy_ger_gemm(m, n, k, a, ld_a, b, ld_b, c, ld_c),
+                    GemmRoutines::Kernel4x4Gemm => gemm(m, n, k, a, ld_a, b, ld_b, c, ld_c),
                 },
                 1,
             );
@@ -101,7 +102,7 @@ struct Record {
 fn run() -> Result<(), Box<dyn Error>> {
     let mut wtr = csv::Writer::from_writer(io::stdout());
 
-    let dimensions = vec![50, 100, 200, 300, 500, 700, 1_000, 2_000, 3_000, 5000];
+    let dimensions = vec![40, 120, 200, 400, 800];
 
     measure_performance(&mut wtr, dimensions)?;
 

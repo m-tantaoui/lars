@@ -3,7 +3,7 @@ extern crate test;
 use crate::dot::{axpy, dots};
 use crate::utils::{ele_i, ele_ij};
 
-use self::GemmRoutines::{AxPyGemm, AxPyGerGemm, DotsGemm, NaiveGemm};
+use self::GemmRoutines::{AxPyGemm, AxPyGerGemm, DotsGemm, Kernel4x4Gemm, NaiveGemm};
 use std::cmp::min;
 use std::fmt;
 use std::slice::Iter;
@@ -250,7 +250,8 @@ pub fn block_axpy_ger_gemm(
     }
 }
 
-fn gemm_4x4_kernel(
+#[target_feature(enable = "avx2")]
+unsafe fn gemm_4x4_kernel(
     k: usize,
     a: &[f64],
     ld_a: usize,
@@ -352,15 +353,17 @@ pub fn gemm(
 
     for j in (0..n).step_by(nr) {
         for i in (0..m).step_by(mr) {
-            gemm_4x4_kernel(
-                k,
-                &a[ele_ij(i, 0, ld_a)..],
-                ld_a,
-                &mut b[ele_ij(0, j, ld_b)..],
-                ld_b,
-                &mut c[ele_ij(i, j, ld_c)..],
-                ld_c,
-            )
+            unsafe {
+                gemm_4x4_kernel(
+                    k,
+                    &a[ele_ij(i, 0, ld_a)..],
+                    ld_a,
+                    &mut b[ele_ij(0, j, ld_b)..],
+                    ld_b,
+                    &mut c[ele_ij(i, j, ld_c)..],
+                    ld_c,
+                )
+            }
         }
     }
 }
@@ -371,11 +374,13 @@ pub enum GemmRoutines {
     DotsGemm,
     AxPyGemm,
     AxPyGerGemm,
+    Kernel4x4Gemm,
 }
 
 impl GemmRoutines {
     pub fn iterator() -> Iter<'static, GemmRoutines> {
-        static ROUTINES: [GemmRoutines; 4] = [NaiveGemm, DotsGemm, AxPyGemm, AxPyGerGemm];
+        static ROUTINES: [GemmRoutines; 5] =
+            [NaiveGemm, DotsGemm, AxPyGemm, AxPyGerGemm, Kernel4x4Gemm];
         ROUTINES.iter()
     }
 }
