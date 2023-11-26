@@ -8,7 +8,7 @@ use csv::Writer;
 use serde::Serialize;
 use std::time::{Duration, SystemTime};
 
-use lars::matmul::{axpy_gemm, axpy_ger_gemm, dots_gemm, gemm, naive_gemm, GemmRoutines};
+use lars::matmul::{axpy_gemm, axpy_ger_gemm, dots_gemm, gemm_5_loops, naive_gemm, GemmRoutines};
 
 extern crate csv;
 
@@ -57,7 +57,7 @@ fn measure_performance(
                     GemmRoutines::DotsGemm => dots_gemm(m, n, k, a, ld_a, b, ld_b, c, ld_c),
                     GemmRoutines::AxPyGemm => axpy_gemm(m, n, k, a, ld_a, b, ld_b, c, ld_c),
                     GemmRoutines::AxPyGerGemm => axpy_ger_gemm(m, n, k, a, ld_a, b, ld_b, c, ld_c),
-                    GemmRoutines::Kernel4x4Gemm => gemm(m, n, k, a, ld_a, b, ld_b, c, ld_c),
+                    GemmRoutines::Loop5Gemm => gemm_5_loops(m, n, k, a, ld_a, b, ld_b, c, ld_c),
                 },
                 1,
             );
