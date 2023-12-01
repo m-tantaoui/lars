@@ -7,7 +7,7 @@ use std::cmp::min;
 use std::fmt;
 use std::slice::Iter;
 
-use core::arch::x86_64::*;
+use crate::kernels::gemm_4x4_kernel;
 
 const NR: usize = 4;
 const MR: usize = 4;
@@ -35,66 +35,6 @@ pub fn naive_gemm(
             }
         }
     }
-}
-
-#[target_feature(enable = "avx2")]
-#[allow(non_snake_case)]
-unsafe fn gemm_MRxNR_kernel(
-    k: usize,
-    a: &[f64],
-    ld_a: usize,
-    b: &mut [f64],
-    ld_b: usize,
-    c: &mut [f64],
-    ld_c: usize,
-) {
-    // Declare vector registers to hold 4x4 Columns and load them
-    let mut c_0123_0: __m256d;
-    let mut c_0123_1: __m256d;
-    let mut c_0123_2: __m256d;
-    let mut c_0123_3: __m256d;
-    c_0123_0 = _mm256_loadu_pd(&c[ele_ij(0, 0, ld_c)]);
-    c_0123_1 = _mm256_loadu_pd(&c[ele_ij(0, 1, ld_c)]);
-    c_0123_2 = _mm256_loadu_pd(&c[ele_ij(0, 2, ld_c)]);
-    c_0123_3 = _mm256_loadu_pd(&c[ele_ij(0, 3, ld_c)]);
-
-    for p in 0..k {
-        // declare vector register for loading/broadcasting b[p, j]
-        let mut b_pj: __m256d;
-
-        // declare a vector register to hold the current column of a and load it with four elements of that column
-        let a_0123_p: __m256d = _mm256_loadu_pd(&a[ele_ij(0, p, ld_a)]);
-
-        // Load/broadcast beta( p,0 )
-        b_pj = _mm256_broadcast_sd(&b[ele_ij(p, 0, ld_b)]);
-
-        // update the first column of c with the current element of a times b[p, 0]
-        c_0123_0 = _mm256_fmadd_pd(a_0123_p, b_pj, c_0123_0);
-
-        // Load/broadcast b[p,1]
-        b_pj = _mm256_broadcast_sd(&b[ele_ij(p, 1, ld_b)]);
-
-        // update the second column of C with the current column of A times  b[p,1]
-        c_0123_1 = _mm256_fmadd_pd(a_0123_p, b_pj, c_0123_1);
-
-        // Load/broadcast b[p,2]
-        b_pj = _mm256_broadcast_sd(&b[ele_ij(p, 2, ld_b)]);
-
-        // update the second column of C with the current column of A times  b[p,1]
-        c_0123_2 = _mm256_fmadd_pd(a_0123_p, b_pj, c_0123_2);
-
-        // Load/broadcast b[p,3]
-        b_pj = _mm256_broadcast_sd(&b[ele_ij(p, 3, ld_b)]);
-
-        // update the second column of C with the current column of A times  b[p,1]
-        c_0123_3 = _mm256_fmadd_pd(a_0123_p, b_pj, c_0123_3);
-    }
-
-    //store the updated results
-    _mm256_storeu_pd(&mut c[ele_ij(0, 0, ld_c)], c_0123_0);
-    _mm256_storeu_pd(&mut c[ele_ij(0, 1, ld_c)], c_0123_1);
-    _mm256_storeu_pd(&mut c[ele_ij(0, 2, ld_c)], c_0123_2);
-    _mm256_storeu_pd(&mut c[ele_ij(0, 3, ld_c)], c_0123_3);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -246,7 +186,7 @@ fn loop1(
 ) {
     for i in (0..m).step_by(MR) {
         unsafe {
-            gemm_MRxNR_kernel(
+            gemm_4x4_kernel(
                 k,
                 &a[ele_ij(i, 0, ld_a)..],
                 ld_a,
