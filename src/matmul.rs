@@ -9,6 +9,8 @@ use std::slice::Iter;
 
 use crate::kernels::gemm_4x4_kernel;
 
+use rayon::prelude::*;
+
 const NR: usize = 4;
 const MR: usize = 4;
 
