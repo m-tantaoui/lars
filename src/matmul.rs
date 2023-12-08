@@ -12,6 +12,7 @@ use crate::kernels::gemm_4x4_kernel;
 use rayon::prelude::*;
 use std::array;
 use std::convert::TryFrom;
+use std::time::{Duration, SystemTime};
 use test::stats::Stats;
 
 const NR: usize = 4;
@@ -20,6 +21,18 @@ const MR: usize = 4;
 const NC: usize = 96;
 const MC: usize = 96;
 const KC: usize = 96;
+
+fn timeit<F: FnMut() -> T, T>(mut f: F, repeat: usize) -> Vec<Duration> {
+    let durations: Vec<Duration> = (0..repeat)
+        .map(|_| {
+            let start = SystemTime::now();
+            f();
+            let end = SystemTime::now();
+            end.duration_since(start).unwrap()
+        })
+        .collect();
+    durations
+}
 
 #[allow(clippy::too_many_arguments)]
 pub fn naive_gemm(
@@ -321,6 +334,13 @@ mod tests {
         let mut c: Vec<f64> = (1..=(m * n)).map(|a| a as f64).collect();
         let ld_c = m; // leading dimension of C (number of rows)
 
+        let durations = timeit(
+            || gemm_5_loops(m, n, k, &a, ld_a, &mut b, ld_b, &mut c, ld_c),
+            10,
+        );
+
+        println!("{:?}", durations);
+
         bencher.iter(|| {
             black_box(gemm_5_loops(m, n, k, &a, ld_a, &mut b, ld_b, &mut c, ld_c));
         });
@@ -361,6 +381,10 @@ mod tests {
         let mut a: Vec<f64> = (1..=(m * k)).map(|a| a as f64).collect();
 
         let mut b: Vec<f64> = (1..=(k * n)).map(|a| a as f64).collect();
+
+        let durations = timeit(|| portable_simd_gemm(m, n, k, &mut a, &mut b), 10);
+
+        println!("{:?}", durations);
 
         bencher.iter(|| black_box(portable_simd_gemm(m, n, k, &mut a, &mut b)));
     }
