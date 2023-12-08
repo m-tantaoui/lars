@@ -5,11 +5,14 @@ use crate::utils::ele_ij;
 use self::GemmRoutines::{Loop5Gemm, NaiveGemm};
 use std::cmp::min;
 use std::fmt;
+use std::simd::f64x16;
 use std::slice::Iter;
 
 use crate::kernels::gemm_4x4_kernel;
-
 use rayon::prelude::*;
+use std::array;
+use std::convert::TryFrom;
+use test::stats::Stats;
 
 const NR: usize = 4;
 const MR: usize = 4;
@@ -37,6 +40,33 @@ pub fn naive_gemm(
             }
         }
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn portable_simd_gemm(m: usize, n: usize, k: usize, a: &[f64], b: &[f64]) {
+    let mut c: Vec<Vec<f64>> = Vec::new();
+
+    (0..m)
+        .into_par_iter()
+        .map(|i| {
+            let a_row: Vec<f64> = a[i..].into_iter().step_by(m).map(|f| *f).collect();
+            let a_row = <&[f64; 16]>::try_from(a_row.as_slice()).unwrap();
+            let a_row_simd = f64x16::from_array(*a_row);
+            let mut c_col: Vec<f64> = Vec::new();
+
+            (0..n)
+                .into_par_iter()
+                .map(|j| {
+                    let b_col = <&[f64; 16]>::try_from(&b[(j * 16)..((j + 1) * 16)]).unwrap();
+                    let b_col_simd = f64x16::from_array(*b_col);
+
+                    let product: [f64; 16] = array::from_fn(|i| a_row_simd[i] * b_col_simd[i]);
+                    product.sum()
+                })
+                .collect_into_vec(&mut c_col);
+            c_col
+        })
+        .collect_into_vec(&mut c);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -222,6 +252,8 @@ impl fmt::Display for GemmRoutines {
 
 #[cfg(test)]
 mod tests {
+    use std::intrinsics::black_box;
+
     use crate::utils::display;
 
     // Note this useful idiom: importing names from outer (for mod tests) scope.
@@ -231,21 +263,21 @@ mod tests {
     #[bench]
     fn benchmark_naive_gemm(bencher: &mut Bencher) {
         // defining matrices as vectors (column major matrices)
-        let m = 3; //number of rows of A
-        let n = 2; // number of columns of B
-        let k = 3; // number of columns of A and number of rows of B , they must be equal!!!!!
+        let m = 8000; //number of rows of A
+        let n = 8000; // number of columns of B
+        let k = 16; // number of columns of A and number of rows of B , they must be equal!!!!!
 
-        let a = vec![1.0, 1.0, -2.0, -2.0, 1.0, 2.0, 2.0, 3.0, 1.0];
-        let ld_a = 3; // leading dimension of A
+        let a: Vec<f64> = (1..=(m * k)).map(|a| a as f64).collect();
+        let ld_a = m; // leading dimension of A (number of rows)
 
-        let b = vec![-2.0, 1.0, -1.0, 1.0, 3.0, 2.0];
-        let ld_b = 3; // leading dimension of B
+        let mut b: Vec<f64> = (1..=(k * n)).map(|a| a as f64).collect();
+        let ld_b = k; // leading dimension of B (number of rows)
 
-        let mut c = vec![1.0, -1.0, -2.0, 0.0, 2.0, 1.0];
-        let ld_c = 3; // leading dimension of C
+        let mut c: Vec<f64> = (1..=(m * n)).map(|a| a as f64).collect();
+        let ld_c = m; // leading dimension of C (number of rows)
 
         bencher.iter(|| {
-            naive_gemm(m, n, k, &a, ld_a, &b, ld_b, &mut c, ld_c);
+            black_box(naive_gemm(m, n, k, &a, ld_a, &mut b, ld_b, &mut c, ld_c));
         });
     }
 
@@ -276,40 +308,40 @@ mod tests {
     #[bench]
     fn benchmark_gemm_5_loops(bencher: &mut Bencher) {
         // defining matrices as vectors (column major matrices)
-        let m = 4 * 48; //number of rows of A
-        let n = 4 * 48; // number of columns of B
-        let k = 4 * 48; // number of columns of A and number of rows of B , they must be equal!!!!!
+        let m = 8000; //number of rows of A
+        let n = 8000; // number of columns of B
+        let k = 16; // number of columns of A and number of rows of B , they must be equal!!!!!
 
         let a: Vec<f64> = (1..=(m * k)).map(|a| a as f64).collect();
-        let ld_a = 4 * 48; // leading dimension of A (number of rows)
+        let ld_a = m; // leading dimension of A (number of rows)
 
         let mut b: Vec<f64> = (1..=(k * n)).map(|a| a as f64).collect();
-        let ld_b = 4 * 48; // leading dimension of B (number of rows)
+        let ld_b = k; // leading dimension of B (number of rows)
 
         let mut c: Vec<f64> = (1..=(m * n)).map(|a| a as f64).collect();
-        let ld_c = 4 * 48; // leading dimension of C (number of rows)
+        let ld_c = m; // leading dimension of C (number of rows)
 
         bencher.iter(|| {
-            gemm_5_loops(m, n, k, &a, ld_a, &mut b, ld_b, &mut c, ld_c);
+            black_box(gemm_5_loops(m, n, k, &a, ld_a, &mut b, ld_b, &mut c, ld_c));
         });
     }
 
     #[test]
     fn test_gemm_5_loops() {
         // defining matrices as vectors (column major matrices)
-        let m = 4 * 2; //number of rows of A
-        let n = 4 * 2; // number of columns of B
-        let k = 4 * 2; // number of columns of A and number of rows of B , they must be equal!!!!!
+        let m = 4000; //number of rows of A
+        let n = 4000; // number of columns of B
+        let k = 16; // number of columns of A and number of rows of B , they must be equal!!!!!
 
         let a: Vec<f64> = (1..=(m * k)).map(|a| a as f64).collect();
-        let ld_a = 4 * 2; // leading dimension of A (number of rows)
+        let ld_a = m; // leading dimension of A (number of rows)
 
         let mut b: Vec<f64> = (1..=(k * n)).map(|a| a as f64).collect();
-        let ld_b = 4 * 2; // leading dimension of B (number of rows)
+        let ld_b = k; // leading dimension of B (number of rows)
 
         let mut c: Vec<f64> = (1..=(m * n)).map(|a| a as f64).collect();
         let mut c_ref: Vec<f64> = (1..=(m * n)).map(|a| a as f64).collect();
-        let ld_c = 4 * 2; // leading dimension of C (number of rows)
+        let ld_c = m; // leading dimension of C (number of rows)
 
         // computing C:=AB + C
         gemm_5_loops(m, n, k, &a, ld_a, &mut b, ld_b, &mut c, ld_c);
@@ -317,5 +349,19 @@ mod tests {
         naive_gemm(m, n, k, &a, ld_a, &b, ld_b, &mut c_ref, ld_c);
 
         assert_eq!(c, c_ref);
+    }
+
+    #[bench]
+    fn test_portable_simd_gemm(bencher: &mut Bencher) {
+        // defining matrices as vectors (column major matrices)
+        let m = 8000; //number of rows of A
+        let n = 8000; // number of columns of B
+        let k = 16; // number of columns of A and number of rows of B , they must be equal!!!!!
+
+        let mut a: Vec<f64> = (1..=(m * k)).map(|a| a as f64).collect();
+
+        let mut b: Vec<f64> = (1..=(k * n)).map(|a| a as f64).collect();
+
+        bencher.iter(|| black_box(portable_simd_gemm(m, n, k, &mut a, &mut b)));
     }
 }
