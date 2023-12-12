@@ -2,11 +2,3 @@
 name = "lars"
 version = "0.1.0"
 edition = "2021"
-
-[dev-dependencies]
-serde = { version = "1.0.193", features = ["derive"] }
-
-[dependencies]
-csv = "1.3.0"
-rayon = "1.8.0"
-serde = { version = "1.0.193", features = ["derive"] }
