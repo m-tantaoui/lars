@@ -10,7 +10,7 @@ pub unsafe fn gemm_4x4_kernel(
     k: usize,
     a: &[f64],
     ld_a: usize,
-    b: &mut [f64],
+    b: &[f64],
     ld_b: usize,
     c: &mut [f64],
     ld_c: usize,

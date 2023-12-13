@@ -9,6 +9,8 @@ use std::slice::Iter;
 
 use crate::kernels::gemm_4x4_kernel;
 
+use rayon::prelude::*;
+
 const NR: usize = 4;
 const MR: usize = 4;
 
@@ -44,18 +46,18 @@ pub fn gemm_5_loops(
     k: usize,
     a: &[f64],
     ld_a: usize,
-    b: &mut [f64],
+    b: &[f64],
     ld_b: usize,
     c: &mut [f64],
     ld_c: usize,
 ) {
-    if m % MR != 0 || MC % MR != 0 {
-        panic!("m and MC must be multiples of MR\n")
-    }
+    // if m % MR != 0 || MC % MR != 0 {
+    //     panic!("m and MC must be multiples of MR\n")
+    // }
 
-    if n % NR != 0 || NC % NR != 0 {
-        panic!("n and NC must be multiples of NR\n")
-    }
+    // if n % NR != 0 || NC % NR != 0 {
+    //     panic!("n and NC must be multiples of NR\n")
+    // }
 
     loop5(m, n, k, a, ld_a, b, ld_b, c, ld_c);
 }
@@ -67,7 +69,7 @@ fn loop5(
     k: usize,
     a: &[f64],
     ld_a: usize,
-    b: &mut [f64],
+    b: &[f64],
     ld_b: usize,
     c: &mut [f64],
     ld_c: usize,
@@ -80,7 +82,7 @@ fn loop5(
             k,
             a,
             ld_a,
-            &mut b[ele_ij(0, j, ld_b)..],
+            &b[ele_ij(0, j, ld_b)..],
             ld_b,
             &mut c[ele_ij(0, j, ld_c)..],
             ld_c,
@@ -95,7 +97,7 @@ fn loop4(
     k: usize,
     a: &[f64],
     ld_a: usize,
-    b: &mut [f64],
+    b: &[f64],
     ld_b: usize,
     c: &mut [f64],
     ld_c: usize,
@@ -108,7 +110,7 @@ fn loop4(
             pb,
             &a[ele_ij(0, p, ld_a)..],
             ld_a,
-            &mut b[ele_ij(p, 0, ld_b)..],
+            &b[ele_ij(p, 0, ld_b)..],
             ld_b,
             c,
             ld_c,
@@ -123,7 +125,7 @@ fn loop3(
     k: usize,
     a: &[f64],
     ld_a: usize,
-    b: &mut [f64],
+    b: &[f64],
     ld_b: usize,
     c: &mut [f64],
     ld_c: usize,
@@ -151,7 +153,7 @@ fn loop2(
     k: usize,
     a: &[f64],
     ld_a: usize,
-    b: &mut [f64],
+    b: &[f64],
     ld_b: usize,
     c: &mut [f64],
     ld_c: usize,
@@ -164,7 +166,7 @@ fn loop2(
             k,
             a,
             ld_a,
-            &mut b[ele_ij(0, j, ld_b)..],
+            &b[ele_ij(0, j, ld_b)..],
             ld_b,
             &mut c[ele_ij(0, j, ld_c)..],
             ld_c,
@@ -179,7 +181,7 @@ fn loop1(
     k: usize,
     a: &[f64],
     ld_a: usize,
-    b: &mut [f64],
+    b: &[f64],
     ld_b: usize,
     c: &mut [f64],
     ld_c: usize,
@@ -297,22 +299,35 @@ mod tests {
     #[test]
     fn test_gemm_5_loops() {
         // defining matrices as vectors (column major matrices)
-        let m = 4000; //number of rows of A
-        let n = 4000; // number of columns of B
-        let k = 16; // number of columns of A and number of rows of B , they must be equal!!!!!
+        let m = 4; //number of rows of A
+        let n = 4; // number of columns of B
+        let k = 4; // number of columns of A and number of rows of B , they must be equal!!!!!
 
         let a: Vec<f64> = (1..=(m * k)).map(|a| a as f64).collect();
         let ld_a = m; // leading dimension of A (number of rows)
 
-        let mut b: Vec<f64> = (1..=(k * n)).map(|a| a as f64).collect();
+        let b: Vec<f64> = (1..=(k * n)).map(|a| a as f64).collect();
         let ld_b = k; // leading dimension of B (number of rows)
 
         let mut c: Vec<f64> = (1..=(m * n)).map(|a| a as f64).collect();
         let mut c_ref: Vec<f64> = (1..=(m * n)).map(|a| a as f64).collect();
         let ld_c = m; // leading dimension of C (number of rows)
 
+        // display(m, k, ld_a, &a);
+        // println!();
+        // display(k, n, ld_b, &b);
+        // println!();
+        // display(m, n, ld_c, &c);
+
+        c.par_chunks_mut(m * 4)
+            .enumerate()
+            .for_each(|(j, mut c_column)| {
+                println!("inside closure calling gemm");
+                gemm_5_loops(m, n, k, &a, ld_a, &b, ld_b, &mut c_column, ld_c);
+            });
+
         // computing C:=AB + C
-        gemm_5_loops(m, n, k, &a, ld_a, &mut b, ld_b, &mut c, ld_c);
+        // gemm_5_loops(m, n, k, &a, ld_a, &b, ld_b, &mut c, ld_c);
 
         naive_gemm(m, n, k, &a, ld_a, &b, ld_b, &mut c_ref, ld_c);
 
