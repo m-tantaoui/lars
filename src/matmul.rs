@@ -1,6 +1,9 @@
 extern crate test;
 
-use crate::utils::ele_ij;
+use rayon::iter::{IndexedParallelIterator, ParallelIterator};
+use rayon::prelude::ParallelSliceMut;
+
+use crate::utils::{at, display};
 
 use self::GemmRoutines::{Loop5Gemm, NaiveGemm};
 use std::cmp::min;
@@ -8,8 +11,6 @@ use std::fmt;
 use std::slice::Iter;
 
 use crate::kernels::gemm_4x4_kernel;
-
-use rayon::prelude::*;
 
 const NR: usize = 4;
 const MR: usize = 4;
@@ -33,14 +34,14 @@ pub fn naive_gemm(
     for j in 0..n {
         for p in 0..k {
             for i in 0..m {
-                c[ele_ij(i, j, ld_c)] += a[ele_ij(i, p, ld_a)] * b[ele_ij(p, j, ld_b)];
+                c[at(i, j, ld_c)] += a[at(i, p, ld_a)] * b[at(p, j, ld_b)];
             }
         }
     }
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn gemm_5_loops(
+pub fn parallelized_gemm(
     m: usize,
     n: usize,
     k: usize,
@@ -51,13 +52,47 @@ pub fn gemm_5_loops(
     c: &mut [f64],
     ld_c: usize,
 ) {
-    // if m % MR != 0 || MC % MR != 0 {
-    //     panic!("m and MC must be multiples of MR\n")
-    // }
+    if m % MR != 0 || MC % MR != 0 {
+        panic!("m and MC must be multiples of MR\n")
+    }
 
-    // if n % NR != 0 || NC % NR != 0 {
-    //     panic!("n and NC must be multiples of NR\n")
-    // }
+    if n % NR != 0 || NC % NR != 0 {
+        panic!("n and NC must be multiples of NR\n")
+    }
+
+    // parallelizing the first loop
+    c.chunks_mut(m * NC).enumerate().for_each(|(j, c_chunk)| {
+        let b_chunk_start_index = j * k * NC;
+        let b_chunk_stop_index = min((j + 1) * (NC * k), b.len());
+        let b_chunk = &b[b_chunk_start_index..b_chunk_stop_index];
+
+        for p in (0..k).step_by(KC) {
+            let a_p_start_index = p * m * KC;
+            let a_p_stop_index = min((p + 1) * m * KC, a.len());
+            let a_p = &a[a_p_start_index..a_p_stop_index];
+        }
+    });
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn gemm(
+    m: usize,
+    n: usize,
+    k: usize,
+    a: &[f64],
+    ld_a: usize,
+    b: &[f64],
+    ld_b: usize,
+    c: &mut [f64],
+    ld_c: usize,
+) {
+    if m % MR != 0 || MC % MR != 0 {
+        panic!("m and MC must be multiples of MR\n")
+    }
+
+    if n % NR != 0 || NC % NR != 0 {
+        panic!("n and NC must be multiples of NR\n")
+    }
 
     loop5(m, n, k, a, ld_a, b, ld_b, c, ld_c);
 }
@@ -82,9 +117,9 @@ fn loop5(
             k,
             a,
             ld_a,
-            &b[ele_ij(0, j, ld_b)..],
+            &b[at(0, j, ld_b)..],
             ld_b,
-            &mut c[ele_ij(0, j, ld_c)..],
+            &mut c[at(0, j, ld_c)..],
             ld_c,
         )
     }
@@ -108,9 +143,9 @@ fn loop4(
             m,
             n,
             pb,
-            &a[ele_ij(0, p, ld_a)..],
+            &a[at(0, p, ld_a)..],
             ld_a,
-            &b[ele_ij(p, 0, ld_b)..],
+            &b[at(p, 0, ld_b)..],
             ld_b,
             c,
             ld_c,
@@ -136,11 +171,11 @@ fn loop3(
             ib,
             n,
             k,
-            &a[ele_ij(i, 0, ld_a)..],
+            &a[at(i, 0, ld_a)..],
             ld_a,
             b,
             ld_b,
-            &mut c[ele_ij(i, 0, ld_c)..],
+            &mut c[at(i, 0, ld_c)..],
             ld_c,
         )
     }
@@ -166,9 +201,9 @@ fn loop2(
             k,
             a,
             ld_a,
-            &b[ele_ij(0, j, ld_b)..],
+            &b[at(0, j, ld_b)..],
             ld_b,
-            &mut c[ele_ij(0, j, ld_c)..],
+            &mut c[at(0, j, ld_c)..],
             ld_c,
         )
     }
@@ -190,11 +225,11 @@ fn loop1(
         unsafe {
             gemm_4x4_kernel(
                 k,
-                &a[ele_ij(i, 0, ld_a)..],
+                &a[at(i, 0, ld_a)..],
                 ld_a,
                 b,
                 ld_b,
-                &mut c[ele_ij(i, 0, ld_c)..],
+                &mut c[at(i, 0, ld_c)..],
                 ld_c,
             )
         }
@@ -222,7 +257,6 @@ impl fmt::Display for GemmRoutines {
 
 #[cfg(test)]
 mod tests {
-    use std::intrinsics::black_box;
 
     use crate::utils::display;
 
@@ -247,7 +281,7 @@ mod tests {
         let ld_c = m; // leading dimension of C (number of rows)
 
         bencher.iter(|| {
-            black_box(naive_gemm(m, n, k, &a, ld_a, &mut b, ld_b, &mut c, ld_c));
+            naive_gemm(m, n, k, &a, ld_a, &mut b, ld_b, &mut c, ld_c);
         });
     }
 
@@ -292,7 +326,7 @@ mod tests {
         let ld_c = m; // leading dimension of C (number of rows)
 
         bencher.iter(|| {
-            black_box(gemm_5_loops(m, n, k, &a, ld_a, &mut b, ld_b, &mut c, ld_c));
+            gemm(m, n, k, &a, ld_a, &mut b, ld_b, &mut c, ld_c);
         });
     }
 
@@ -313,21 +347,21 @@ mod tests {
         let mut c_ref: Vec<f64> = (1..=(m * n)).map(|a| a as f64).collect();
         let ld_c = m; // leading dimension of C (number of rows)
 
-        // display(m, k, ld_a, &a);
-        // println!();
-        // display(k, n, ld_b, &b);
-        // println!();
-        // display(m, n, ld_c, &c);
+        // // display(m, k, ld_a, &a);
+        // // println!();
+        // // display(k, n, ld_b, &b);
+        // // println!();
+        // // display(m, n, ld_c, &c);
 
-        c.par_chunks_mut(m * 4)
-            .enumerate()
-            .for_each(|(j, mut c_column)| {
-                println!("inside closure calling gemm");
-                gemm_5_loops(m, n, k, &a, ld_a, &b, ld_b, &mut c_column, ld_c);
-            });
+        // c.par_chunks_mut(m * 4)
+        //     .enumerate()
+        //     .for_each(|(j, mut c_column)| {
+        //         println!("inside closure calling gemm");
+        //         gemm_5_loops(m, n, k, &a, ld_a, &b, ld_b, &mut c_column, ld_c);
+        //     });
 
         // computing C:=AB + C
-        // gemm_5_loops(m, n, k, &a, ld_a, &b, ld_b, &mut c, ld_c);
+        gemm(m, n, k, &a, ld_a, &b, ld_b, &mut c, ld_c);
 
         naive_gemm(m, n, k, &a, ld_a, &b, ld_b, &mut c_ref, ld_c);
 
