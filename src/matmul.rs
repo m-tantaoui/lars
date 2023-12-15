@@ -3,14 +3,21 @@ extern crate test;
 use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 use rayon::prelude::ParallelSliceMut;
 
-use crate::utils::{at, display};
+use crate::utils::at;
 
 use self::GemmRoutines::{Loop5Gemm, NaiveGemm};
 use std::cmp::min;
 use std::fmt;
 use std::slice::Iter;
 
+#[cfg(any(
+    all(target_arch = "x86", target_feature = "avx2"),
+    all(target_arch = "x86_64", target_feature = "avx2")
+))]
 use crate::kernels::gemm_4x4_kernel;
+
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+use crate::kernels::gemm_4x4_kernel_arm;
 
 const NR: usize = 4;
 const MR: usize = 4;
@@ -60,18 +67,20 @@ pub fn parallelized_gemm(
         panic!("n and NC must be multiples of NR\n")
     }
 
-    // parallelizing the first loop
-    c.chunks_mut(m * NC).enumerate().for_each(|(j, c_chunk)| {
-        let b_chunk_start_index = j * k * NC;
-        let b_chunk_stop_index = min((j + 1) * (NC * k), b.len());
-        let b_chunk = &b[b_chunk_start_index..b_chunk_stop_index];
+    // // parallelizing the first loop
+    // c.par_chunks_mut(m * NC)
+    //     .enumerate()
+    //     .for_each(|(j, c_chunk)| {
+    //         let b_chunk_start_index = j * k * NC;
+    //         let b_chunk_stop_index = min((j + 1) * (NC * k), b.len());
+    //         let b_chunk = &b[b_chunk_start_index..b_chunk_stop_index];
 
-        for p in (0..k).step_by(KC) {
-            let a_p_start_index = p * m * KC;
-            let a_p_stop_index = min((p + 1) * m * KC, a.len());
-            let a_p = &a[a_p_start_index..a_p_stop_index];
-        }
-    });
+    //         for p in (0..k).step_by(KC) {
+    //             let a_p_start_index = p * m * KC;
+    //             let a_p_stop_index = min((p + 1) * m * KC, a.len());
+    //             let a_p = &a[a_p_start_index..a_p_stop_index];
+    //         }
+    //     });
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -222,16 +231,40 @@ fn loop1(
     ld_c: usize,
 ) {
     for i in (0..m).step_by(MR) {
-        unsafe {
-            gemm_4x4_kernel(
-                k,
-                &a[at(i, 0, ld_a)..],
-                ld_a,
-                b,
-                ld_b,
-                &mut c[at(i, 0, ld_c)..],
-                ld_c,
-            )
+        #[cfg(any(
+            all(target_arch = "x86", target_feature = "avx2"),
+            all(target_arch = "x86_64", target_feature = "avx2")
+        ))]
+        {
+            if !is_x86_feature_detected!("avx2") {
+                todo!();
+            }
+            unsafe {
+                gemm_4x4_kernel(
+                    k,
+                    &a[at(i, 0, ld_a)..],
+                    ld_a,
+                    b,
+                    ld_b,
+                    &mut c[at(i, 0, ld_c)..],
+                    ld_c,
+                )
+            }
+        }
+
+        #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+        {
+            unsafe {
+                gemm_4x4_kernel_arm(
+                    k,
+                    &a[at(i, 0, ld_a)..],
+                    ld_a,
+                    b,
+                    ld_b,
+                    &mut c[at(i, 0, ld_c)..],
+                    ld_c,
+                )
+            }
         }
     }
 }
