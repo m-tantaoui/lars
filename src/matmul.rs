@@ -1,8 +1,6 @@
 extern crate test;
 
-use rayon::iter::{IndexedParallelIterator, ParallelIterator};
-use rayon::prelude::ParallelSliceMut;
-
+use crate::kernels::gemm_4x4_kernel;
 use crate::utils::at;
 
 use self::GemmRoutines::{Loop5Gemm, NaiveGemm};
@@ -231,14 +229,8 @@ fn loop1(
     ld_c: usize,
 ) {
     for i in (0..m).step_by(MR) {
-        #[cfg(any(
-            all(target_arch = "x86", target_feature = "avx2"),
-            all(target_arch = "x86_64", target_feature = "avx2")
-        ))]
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            if !is_x86_feature_detected!("avx2") {
-                todo!();
-            }
             unsafe {
                 gemm_4x4_kernel(
                     k,
@@ -252,7 +244,7 @@ fn loop1(
             }
         }
 
-        #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+        #[cfg(target_arch = "aarch64")]
         {
             unsafe {
                 gemm_4x4_kernel_arm(

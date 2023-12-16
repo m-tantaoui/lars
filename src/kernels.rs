@@ -83,10 +83,7 @@ pub unsafe fn gemm_4x4_kernel_arm(
     // _mm256_storeu_pd(&mut c[at(0, 3, ld_c)], c_0123_3);
 }
 
-#[cfg(any(
-    all(target_arch = "x86", target_feature = "avx2"),
-    all(target_arch = "x86_64", target_feature = "avx2")
-))]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[allow(non_snake_case)]
 /// # Safety
 ///
@@ -100,6 +97,11 @@ pub unsafe fn gemm_4x4_kernel(
     c: &mut [f64],
     ld_c: usize,
 ) {
+    if !is_x86_feature_detected!("fma") {
+        let msg = "fma feature was not detected in your hardware";
+        panic!("{}", msg);
+    }
+
     // Declare vector registers to hold 4x4 Columns and load them
     let mut c_0123_0: __m256d = _mm256_loadu_pd(&c[at(0, 0, ld_c)]);
     let mut c_0123_1: __m256d = _mm256_loadu_pd(&c[at(0, 1, ld_c)]);
