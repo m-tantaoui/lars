@@ -1,5 +1,5 @@
 #include <iostream>
-#include "dot_gpu.h"
+#include "lib.h"
 
 using namespace std;
 
@@ -27,7 +27,7 @@ extern "C"
         display_vector(v2, N);
         float *gpu_res;
         float res = 0.0;
-        gpu_res = gpu_dot(v1, v2, N);
+        gpu_res = cuda_dot(v1, v2, N);
         for (int i = 0; i < blocksPerGrid; i++)
         {
             res += gpu_res[i];
