@@ -2,7 +2,14 @@
 name = "lars"
 version = "0.1.0"
 edition = "2021"
+build = "build.rs"
+links = "cudart"
+
 
 [dependencies]
+libc = "0.2.151"
 rayon = "1.8.0"
+
+[build-dependencies]
+cc = "1.0.83"
 
