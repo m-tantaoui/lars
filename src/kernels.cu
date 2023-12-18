@@ -1,5 +1,19 @@
 #include "kernels.h"
+
+// CUDA runtime
 #include <cuda_runtime.h>
+#include <cublas_v2.h>
+
+// These are the inline versions for all of the SDK helper functions
+inline void checkCuBLAS(const cublasStatus_t error)
+{
+    if (cudaSuccess != error)
+    {
+        fprintf(stderr, "Error: %s:%d, ", __FILE__, __LINE__);
+        fprintf(stderr, "code: %d, reason: %s\n", error, cublasGetStatusString(error));
+        exit(1);
+    }
+}
 
 inline void check(const cudaError_t error)
 {
@@ -11,40 +25,35 @@ inline void check(const cudaError_t error)
     }
 }
 
-__global__ void saxpy(int n, float a, float *x, float *y)
-{
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < n)
-        y[i] = a * x[i] + y[i];
-}
-
-void cuda_dot(float *x, float *y, int n)
+void cuda_matmul(int m, int n, int k, const float *A, const float *B, float *C)
 {
 
-    float *d_x, *d_y;
-    cudaError_t err;
+    // Initialize CUDA and cuBLAS
+    cublasHandle_t handle;
+    checkCuBLAS(cublasCreate(&handle));
 
-    check(cudaMalloc(&d_x, n * sizeof(float)));
-    cudaMalloc(&d_y, n * sizeof(float));
+    float alpha = 1.0f, beta = 1.0f;
 
-    err = cudaMemcpy(d_x, x, n * sizeof(float), cudaMemcpyHostToDevice);
-    if (err != cudaSuccess)
-    {
-        printf("WTF, Why ??? \n");
-    }
+    float *d_A;
+    float *d_B;
+    float *d_C;
 
-    cudaMemcpy(d_y, y, n * sizeof(float), cudaMemcpyHostToDevice);
+    check(cudaMalloc((void **)&d_A, (m * k) * sizeof(float)));
+    check(cudaMalloc((void **)&d_B, (k * n) * sizeof(float)));
+    check(cudaMalloc((void **)&d_C, (m * n) * sizeof(float)));
 
-    // Perform SAXPY on 1M elements
-    saxpy<<<(n + 255) / 256, 256>>>(n, 10.0f, d_x, d_y);
+    checkCuBLAS(cublasSetVector((m * k), sizeof(float), A, 1, d_A, 1));
+    checkCuBLAS(cublasSetVector((k * n), sizeof(float), B, 1, d_B, 1));
+    checkCuBLAS(cublasSetVector((m * n), sizeof(float), C, 1, d_C, 1));
 
-    cudaMemcpy(y, d_y, n * sizeof(float), cudaMemcpyDeviceToHost);
+    // Perform matrix multiplication: C = alpha * A * B + beta * C
+    checkCuBLAS(cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, k, &alpha, d_A, m, d_B, k, &beta, d_C, m));
+    checkCuBLAS(cublasGetVector(m * n, sizeof(float), d_C, 1, C, 1));
 
-    for (int i = 0; i < n; i++)
-        printf("%f\n", y[i]);
+    cudaFree(d_A);
+    cudaFree(d_B);
+    cudaFree(d_C);
 
-    cudaFree(d_x);
-    cudaFree(d_y);
-    // free(x);
-    // free(y);
+    // Destroy cuBLAS handle
+    cublasDestroy(handle);
 }

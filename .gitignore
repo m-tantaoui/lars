@@ -2,3 +2,4 @@
 /.vscode
 /.venv-lars
 /.venv-lars3.12
+Cargo.lock
