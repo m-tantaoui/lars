@@ -17,9 +17,12 @@ use crate::kernels::gemm_4x4_kernel;
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 use crate::kernels::gemm_4x4_kernel_arm;
 
+// TODO: define a function that can get maximum values for MR and NR
 const NR: usize = 4;
 const MR: usize = 4;
 
+// Write some documentation that explains how we choose those parameters
+// based on L1, L2 and L3 cache
 const NC: usize = 96;
 const MC: usize = 96;
 const KC: usize = 96;
@@ -64,6 +67,9 @@ pub fn parallelized_gemm(
     if n % NR != 0 || NC % NR != 0 {
         panic!("n and NC must be multiples of NR\n")
     }
+
+    // parallelize using rayon
+    todo!();
 
     // // parallelizing the first loop
     // c.par_chunks_mut(m * NC)
